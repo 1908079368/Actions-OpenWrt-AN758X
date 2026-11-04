@@ -43,7 +43,7 @@ make defconfig
 
 set -euo pipefail
 #KEEP="base package-manager"
-KEEP="base" 
+KEEP="base mwan3" 
 # 1) 全部关闭
 sed -i -E 's/^(CONFIG_PACKAGE_luci-i18n-[a-zA-Z0-9_-]+-zh-cn)=(y|m)/# \1 is not set/' .config
 # 2) 白名单重开（直接改写为 =y）
