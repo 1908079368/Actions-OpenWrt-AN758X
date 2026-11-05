@@ -657,6 +657,45 @@ jobs:
               echo "已补写机型符号: ${PROFILE}"
             fi
             echo "机型校验通过: ${PROFILE}"
+
+            # ===== 补回被 defconfig 丢弃的 CONFIG_PACKAGE_*=y（以机型配置为准）=====
+            CFG_FILE="${GITHUB_WORKSPACE}/configs/${PROFILE}.config"
+            if [ -f "$CFG_FILE" ]; then
+              RESTORED=0
+              while IFS= read -r ln; do
+                case "$ln" in
+                  CONFIG_PACKAGE_*=y)
+                    sym="${ln%%=*}"
+                    if ! grep -q "^${sym}=" .config; then
+                      printf '%s\n' "$ln" >> .config
+                      echo "  补回被丢弃的包选项: ${sym}"
+                      RESTORED=$((RESTORED + 1))
+                    fi
+                    ;;
+                esac
+              done < "$CFG_FILE"
+              echo "补回包选项总数: ${RESTORED}"
+              # ===== fitblk 特殊处理：上游把 fitblk 加进 DEVICE_PACKAGES，
+              # 但它的 DEPENDS:=+fit-check-sign 在树/源里不存在，defconfig 会静默丢弃该符号。
+              # 这里放宽依赖并强制选中，保证 staging 仓库里有 fitblk 包。
+              if [ -f package/utils/fitblk/Makefile ]; then
+                sed -i 's/DEPENDS:=+fit-check-sign/DEPENDS:=/' package/utils/fitblk/Makefile
+                echo "  fitblk: 已放宽对 fit-check-sign 的依赖"
+              else
+                echo "::warning::未找到 package/utils/fitblk/Makefile"
+              fi
+              if ! grep -q '^CONFIG_PACKAGE_fitblk=y' .config; then
+                echo 'CONFIG_PACKAGE_fitblk=y' >> .config
+                echo "  强制选中 CONFIG_PACKAGE_fitblk=y"
+              fi
+              if ! grep -q '^CONFIG_PACKAGE_fitblk=y' .config; then
+                echo "::error::fitblk 仍未选中，终止以免白跑编译"
+                exit 1
+              fi
+              echo "fitblk 就绪"
+            else
+              echo "::warning::未找到机型配置 ${CFG_FILE}，跳过包选项补回"
+            fi
           fi
 
           TARGET=$(grep '^CONFIG_TARGET_BOARD=' .config | cut -d'"' -f2)
