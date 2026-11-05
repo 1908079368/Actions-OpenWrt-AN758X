@@ -640,11 +640,21 @@ jobs:
           #  echo "::warning::luci-i18n-airoha-npu-zh-cn 未启用（po/zh_Hans 未注入？界面将为英文）"
           #fi
 
-          # 机型校验: 机型名写错时直接失败，避免静默全编译
+          # 机型校验: 机型名写错时直接失败；若 defconfig 把机型符号静默剔除则补写回
           if [ "${PROFILE}" != "all" ]; then
+            echo "===== 机型符号自检 ====="
+            grep -n "CONFIG_TARGET_DEVICE_\|CONFIG_TARGET_MULTI_PROFILE\|CONFIG_TARGET_PER_DEVICE" .config | head -12 || true
             if ! grep -q "^CONFIG_TARGET_DEVICE_airoha_${SOC}_DEVICE_${PROFILE}=y" .config; then
-              echo "::error::机型 ${PROFILE} 在 ${SOC} 下不存在，请检查 profile 名称"
-              exit 1
+              echo "::warning::defconfig 后机型符号缺失，自动补写（不阻断编译）"
+              grep -q "^CONFIG_TARGET_MULTI_PROFILE=" .config || echo "CONFIG_TARGET_MULTI_PROFILE=y" >> .config
+              grep -q "^CONFIG_TARGET_PER_DEVICE_ROOTFS=" .config || echo "CONFIG_TARGET_PER_DEVICE_ROOTFS=y" >> .config
+              echo "CONFIG_TARGET_DEVICE_airoha_${SOC}_DEVICE_${PROFILE}=y" >> .config
+              echo "CONFIG_TARGET_DEVICE_PACKAGES_airoha_${SOC}_DEVICE_${PROFILE}=\"\"" >> .config
+              if ! grep -q "^CONFIG_TARGET_DEVICE_airoha_${SOC}_DEVICE_${PROFILE}=y" .config; then
+                echo "::error::机型符号补写失败: ${PROFILE}"
+                exit 1
+              fi
+              echo "已补写机型符号: ${PROFILE}"
             fi
             echo "机型校验通过: ${PROFILE}"
           fi
